@@ -31,6 +31,18 @@ const verifyJWT = (req, res, next) => {
     });
 };
 
+
+// verify seller
+const verifySeller = async (req, res, next) => {
+    const email = req.decoded.email;
+    const query = { email: email };
+    const user = await userCollection.findOne(query);
+    if (user?.role !== "seller") {
+        return res.send({ message: "Forbidden access" });
+    }
+    next();
+};
+
 // MongoDB
 const url = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.lggq9by.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
@@ -53,6 +65,13 @@ const dbConnect = async () => {
         console.log("Successfully connected to MongoDB");
 
 
+        // get user 
+        app.get("/user/:email", async (req, res) => {
+            const query = { email: req.params.email }
+            const user = await userCollection.findOne(query)
+            res.send(user)
+        })
+
         // insert user 
         app.post("/users", async (req, res) => {
             const user = req.body;
@@ -65,6 +84,14 @@ const dbConnect = async () => {
             const result = await userCollection.insertOne(user);
             res.send(result);
         });
+
+        // add product
+        app.post("/add-products", verifyJWT, verifySeller, async (req, res) => {
+            const product = req.body;
+            const result = await productCollection.insertOne(product);
+            res.send(result);
+        });
+
 
 
 
