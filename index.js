@@ -2,7 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const jwt = require("jsonwebtoken")
 require("dotenv").config();
-const { MongoClient, ServerApiVersion } = require('mongodb');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const app = express();
 const port = process.env.PORT || 4000;
 
@@ -43,6 +43,18 @@ const verifySeller = async (req, res, next) => {
     next();
 };
 
+
+// verify admin
+const verifyAdmin = async (req, res, next) => {
+    const email = req.decoded.email;
+    const query = { email: email };
+    const user = await userCollection.findOne(query);
+    if (user?.role !== "admin") {
+        return res.send({ message: "Forbidden access" });
+    }
+    next();
+};
+
 // MongoDB
 const url = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.lggq9by.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
@@ -71,6 +83,12 @@ const dbConnect = async () => {
             const user = await userCollection.findOne(query)
             res.send(user)
         })
+
+        // // get all user for admin
+        // app.get("/users", verifyJWT,verifyAdmin, async (req, res) => {           
+        //     const user = await userCollection.find().toArray()
+        //     res.send(user)
+        // })
 
         // insert user 
         app.post("/users", async (req, res) => {
@@ -113,13 +131,57 @@ const dbConnect = async () => {
             const products = await productCollection.find(query).sort({ price: sortOption }).toArray()
             const totalProducts = await productCollection.countDocuments(query)
 
-            const productsInfo = await productCollection.find({}, { projection: { category: 1, brand: 1 } }).toArray()
+            // const productsInfo = await productCollection.find({}, { projection: { category: 1, brand: 1 } }).toArray()
 
-            const categories = [...new Set(productsInfo.map((product) => product.category))]
-            const brands =[...new Set(productsInfo.map((product)=>product.brand))]
+            const categories = [...new Set(products.map((product) => product.category))]
+            const brands =[...new Set(products.map((product)=>product.brand))]
            
             res.json({products,brands,categories,totalProducts})
         })
+
+        //product add to wishlist by user
+        app.patch("/wishlist/add", async (req, res) => {
+            const { userEmail, productId } = req.body;
+
+            const result = await userCollection.updateOne(
+                { email: userEmail },
+                { $addToSet: { wishlist: new ObjectId(String(productId)) } }
+            );
+            res.send(result);
+        });
+
+        //get data from wishlist by user
+        app.get("/wishlist/:userId", verifyJWT, async (req, res) => {
+            const userId = req.params.userId;
+
+            const user = await userCollection.findOne({
+                _id: new ObjectId(String(userId)),
+            });
+
+            if (!user) {
+                return res.send({ message: "User not found" });
+            }
+
+            const wishlist = await productCollection
+                .find({ _id: { $in: user.wishlist || [] } })
+                .toArray();
+
+            res.send(wishlist);
+        });
+
+
+        //product remove from wishlist by user
+        app.patch("/wishlist/remove", async (req, res) => {
+            const { userEmail, productId } = req.body;
+
+            const result = await userCollection.updateOne(
+                { email: userEmail },
+                { $pull: { wishlist: new ObjectId(String(productId)) } }
+            );
+            res.send(result);
+        });
+
+
 
 
 
