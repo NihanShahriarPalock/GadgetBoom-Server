@@ -85,13 +85,34 @@ const dbConnect = async () => {
             res.send(result);
         });
 
-        // add product
+        // add product by seller
         app.post("/add-products", verifyJWT, verifySeller, async (req, res) => {
             const product = req.body;
             const result = await productCollection.insertOne(product);
             res.send(result);
         });
+        // all product view in homepage
+        app.get("/all-products", async (req, res) => {
+            const { title, sort, category, brand } = req.query
 
+            const query = {}
+
+            if (title) {
+                query.title = { $regex: title, $option: "i" }
+            }
+            if (category) {
+                query.category = { $regex: category, $option: "i" }
+            }
+
+            if (brand) {
+                query.brand=brand
+            }
+
+            const sortOption = sort === 'asc' ? 1 : -1
+            
+            const products = await productCollection.find(query).sort({ price: sortOption }).toArray()
+            res.json(products)
+        })
 
 
 
