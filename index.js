@@ -18,18 +18,24 @@ app.use(express.json());
 const verifyJWT = (req, res, next) => {
     const authorization = req.headers.authorization;
     if (!authorization) {
-        return res.send({ message: "No Token" });
+        return res.status(401).send({ message: "No Token" });
     }
 
-    const token = authorization.split(" ")[1];
+    const token = authorization.split(" ")[1]; // Extract the token
+    if (!token) {
+        return res.status(401).send({ message: "No Token" });
+    }
+
     jwt.verify(token, process.env.ACCESS_KEY_TOKEN, (err, decoded) => {
         if (err) {
-            return res.send({ message: "Invalid Token" });
+            console.error("JWT Error:", err.message);
+            return res.status(403).send({ message: "Invalid Token" });
         }
-        req.decoded = decoded;
+        req.decoded = decoded; // Attach decoded data to the request
         next();
     });
 };
+
 
 
 // verify seller
@@ -84,11 +90,19 @@ const dbConnect = async () => {
             res.send(user)
         })
 
-        // // get all user for admin
-        // app.get("/users", verifyJWT,verifyAdmin, async (req, res) => {           
-        //     const user = await userCollection.find().toArray()
-        //     res.send(user)
-        // })
+        // get all user for admin
+        app.get("/all-users", async (req, res) => {           
+            const user = await userCollection.find().toArray()
+            res.send(user)
+        })
+        
+        // delete user by admin 
+        app.delete('/user-delete/:id', async (req, res) => {
+            const id = req.params.id
+            const query = { _id: new ObjectId(id) }
+            const result = await userCollection.deleteOne(query)
+            res.send(result)
+        })
 
         // insert user 
         app.post("/users", async (req, res) => {
@@ -109,6 +123,73 @@ const dbConnect = async () => {
             const result = await productCollection.insertOne(product);
             res.send(result);
         });
+          
+        // Single Products Details 
+        app.get('/ProductDetails/:id', async (req, res) => {
+            const id = req.params.id
+            const query = { _id: new ObjectId(id) }
+            const result = await productCollection.findOne(query)
+            res.send(result);
+        })
+
+        // view own added product by seller
+        app.get('/myProducts/:email', verifyJWT, verifySeller, async (req, res) => {
+            const sellerEmail = req.decoded.email;
+            const email = req.params.email;
+
+            if (sellerEmail !== email) {
+                console.log("Forbidden Access: Seller email mismatch");
+                return res.status(403).send({ message: "Forbidden Access" });
+            }
+
+            try {
+                const query = { sellerEmail: email };
+                const products = await productCollection.find(query).toArray();
+                console.log("Fetched Products:", products);
+                res.send(products);
+            } catch (error) {
+                console.error("Error fetching products:", error);
+                res.status(500).send({ message: "Internal Server Error", error: error.message });
+            }
+        });
+
+
+        //update product by seller
+        app.put("/productUpdate/:id", async (req, res) => {
+            const query = { _id: new ObjectId(req.params.id) }
+            const data = {
+                $set: {
+                    title: req.body.title,
+                    brand: req.body.brand,
+                    price: req.body.price,
+                    stock: req.body.stock,
+                    category: req.body.category,
+                    description: req.body.description,
+                    imageURL: req.body.imageURL,
+                }
+            }
+            const result = await productCollection.updateOne(query, data)
+            res.send(result)
+        })
+
+        app.get('/mySingleProduct/:id', async (req, res) => {
+            const id = req.params.id
+            const query = { _id: new ObjectId(id) }
+            const result = await productCollection.findOne(query)
+            res.send(result);
+        })
+
+
+
+        // delete product by seller 
+        app.delete('/myProduct/:id', async (req, res) => {
+            const id = req.params.id
+            const query = { _id: new ObjectId(id) }
+            const result = await productCollection.deleteOne(query)
+            res.send(result)
+        })
+
+        
         // all product view in homepage
         app.get("/all-products", async (req, res) => {
             const { title, sort, category, brand } = req.query
@@ -121,18 +202,15 @@ const dbConnect = async () => {
             if (category) {
                 query.category = { $regex: category, $options: "i" }
             }
-
             if (brand) {
                 query.brand = brand
             }
 
             const sortOption = sort === 'asc' ? 1 : -1;
-
             const products = await productCollection.find(query).sort({ price: sortOption }).toArray()
             const totalProducts = await productCollection.countDocuments(query)
 
             // const productsInfo = await productCollection.find({}, { projection: { category: 1, brand: 1 } }).toArray()
-
             const categories = [...new Set(products.map((product) => product.category))]
             const brands =[...new Set(products.map((product)=>product.brand))]
            
@@ -177,6 +255,47 @@ const dbConnect = async () => {
             const result = await userCollection.updateOne(
                 { email: userEmail },
                 { $pull: { wishlist: new ObjectId(String(productId)) } }
+            );
+            res.send(result);
+        });
+
+        //product add to cartlist by user
+        app.patch("/cartlist/add", async (req, res) => {
+            const { userEmail, productId } = req.body;
+
+            const result = await userCollection.updateOne(
+                { email: userEmail },
+                { $addToSet: { cartlist: new ObjectId(String(productId)) } }
+            );
+            res.send(result);
+        });
+
+        //get data from wishlist by user
+        app.get("/cartlist/:userId", verifyJWT, async (req, res) => {
+            const userId = req.params.userId;
+
+            const user = await userCollection.findOne({
+                _id: new ObjectId(String(userId)),
+            });
+
+            if (!user) {
+                return res.send({ message: "User not found" });
+            }
+
+            const cartlist = await productCollection
+                .find({ _id: { $in: user.cartlist || [] } })
+                .toArray();
+
+            res.send(cartlist);
+        });
+
+        //product remove from cartlist by user
+        app.patch("/cartlist/remove", async (req, res) => {
+            const { userEmail, productId } = req.body;
+
+            const result = await userCollection.updateOne(
+                { email: userEmail },
+                { $pull: { cartlist: new ObjectId(String(productId)) } }
             );
             res.send(result);
         });
