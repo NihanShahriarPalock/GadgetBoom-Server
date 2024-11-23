@@ -8,7 +8,7 @@ const port = process.env.PORT || 4000;
 
 // Middleware
 app.use(cors({
-    origin: "http://localhost:5173",
+    origin: ["http://localhost:5173","https://gadgetboom-d81aa.web.app"],
     optionsSuccessStatus: 200,
 }));
 app.use(express.json());
@@ -21,7 +21,7 @@ const verifyJWT = (req, res, next) => {
         return res.status(401).send({ message: "No Token" });
     }
 
-    const token = authorization.split(" ")[1]; 
+    const token = authorization.split(" ")[1];
     if (!token) {
         return res.status(401).send({ message: "No Token" });
     }
@@ -31,7 +31,7 @@ const verifyJWT = (req, res, next) => {
             console.error("JWT Error:", err.message);
             return res.status(403).send({ message: "Invalid Token" });
         }
-        req.decoded = decoded; 
+        req.decoded = decoded;
         next();
     });
 };
@@ -79,7 +79,7 @@ const productCollection = client.db("GadgetBoom").collection("products")
 
 const dbConnect = async () => {
     try {
-        await client.connect();
+        // await client.connect();
         console.log("Successfully connected to MongoDB");
 
 
@@ -91,11 +91,11 @@ const dbConnect = async () => {
         })
 
         // get all user for admin
-        app.get("/all-users", async (req, res) => {           
+        app.get("/all-users", async (req, res) => {
             const user = await userCollection.find().toArray()
             res.send(user)
         })
-        
+
         // delete user by admin 
         app.delete('/user-delete/:id', async (req, res) => {
             const id = req.params.id
@@ -104,31 +104,30 @@ const dbConnect = async () => {
             res.send(result)
         })
 
-     
+
 
         // Update user by admin
         app.put("/user-update/:id", async (req, res) => {
             try {
-                const id = req.params.id; 
-                const query = { _id: new ObjectId(id) }; 
+                const id = req.params.id;
+                const query = { _id: new ObjectId(id) };
 
-                
+
                 const updateDoc = {
                     $set: {
-                        role: "seller", 
+                        role: "seller",
                     },
                 };
 
                 const result = await userCollection.updateOne(query, updateDoc);
 
-                
                 if (result.modifiedCount === 1) {
                     res.send({ message: "User role updated successfully", result });
                 } else {
                     res.status(404).send({ message: "User not found or already updated" });
                 }
             } catch (error) {
-               
+
                 res.status(500).send({ message: "Server error", error: error.message });
             }
         });
@@ -153,7 +152,7 @@ const dbConnect = async () => {
             const result = await productCollection.insertOne(product);
             res.send(result);
         });
-          
+
         // Single Products Details 
         app.get('/ProductDetails/:id', async (req, res) => {
             const id = req.params.id
@@ -168,17 +167,17 @@ const dbConnect = async () => {
             const email = req.params.email;
 
             if (sellerEmail !== email) {
-                
+
                 return res.status(403).send({ message: "Forbidden Access" });
             }
 
             try {
                 const query = { sellerEmail: email };
                 const products = await productCollection.find(query).toArray();
-               
+
                 res.send(products);
             } catch (error) {
-            
+
                 res.status(500).send({ message: "Internal Server Error", error: error.message });
             }
         });
@@ -219,7 +218,7 @@ const dbConnect = async () => {
             res.send(result)
         })
 
-        
+
         // all product view in products page
         app.get("/all-products", async (req, res) => {
             const { title, sort, category, brand } = req.query
@@ -243,19 +242,18 @@ const dbConnect = async () => {
 
             // const productsInfo = await productCollection.find({}, { projection: { category: 1, brand: 1 } }).toArray()
             const categories = [...new Set(products.map((product) => product.category))]
-            const brands =[...new Set(products.map((product)=>product.brand))]
-           
-            res.json({products,brands,categories,totalProducts})
+            const brands = [...new Set(products.map((product) => product.brand))]
+
+            res.json({ products, brands, categories, totalProducts })
         })
 
-     
+
         // Get products for featured
         app.get("/products", async (req, res) => {
             try {
-                const products = await productCollection.find().limit(6).toArray(); // Limit to 6 items
+                const products = await productCollection.find().limit(6).toArray();
                 res.send(products);
             } catch (error) {
-                // console.error("Error fetching products:", error);
                 res.status(500).send({ error: "Failed to fetch products" });
             }
         });
