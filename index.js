@@ -21,7 +21,7 @@ const verifyJWT = (req, res, next) => {
         return res.status(401).send({ message: "No Token" });
     }
 
-    const token = authorization.split(" ")[1]; // Extract the token
+    const token = authorization.split(" ")[1]; 
     if (!token) {
         return res.status(401).send({ message: "No Token" });
     }
@@ -31,7 +31,7 @@ const verifyJWT = (req, res, next) => {
             console.error("JWT Error:", err.message);
             return res.status(403).send({ message: "Invalid Token" });
         }
-        req.decoded = decoded; // Attach decoded data to the request
+        req.decoded = decoded; 
         next();
     });
 };
@@ -104,6 +104,36 @@ const dbConnect = async () => {
             res.send(result)
         })
 
+     
+
+        // Update user by admin
+        app.put("/user-update/:id", async (req, res) => {
+            try {
+                const id = req.params.id; 
+                const query = { _id: new ObjectId(id) }; 
+
+                
+                const updateDoc = {
+                    $set: {
+                        role: "seller", 
+                    },
+                };
+
+                const result = await userCollection.updateOne(query, updateDoc);
+
+                
+                if (result.modifiedCount === 1) {
+                    res.send({ message: "User role updated successfully", result });
+                } else {
+                    res.status(404).send({ message: "User not found or already updated" });
+                }
+            } catch (error) {
+               
+                res.status(500).send({ message: "Server error", error: error.message });
+            }
+        });
+
+
         // insert user 
         app.post("/users", async (req, res) => {
             const user = req.body;
@@ -138,17 +168,17 @@ const dbConnect = async () => {
             const email = req.params.email;
 
             if (sellerEmail !== email) {
-                console.log("Forbidden Access: Seller email mismatch");
+                
                 return res.status(403).send({ message: "Forbidden Access" });
             }
 
             try {
                 const query = { sellerEmail: email };
                 const products = await productCollection.find(query).toArray();
-                console.log("Fetched Products:", products);
+               
                 res.send(products);
             } catch (error) {
-                console.error("Error fetching products:", error);
+            
                 res.status(500).send({ message: "Internal Server Error", error: error.message });
             }
         });
@@ -190,7 +220,7 @@ const dbConnect = async () => {
         })
 
         
-        // all product view in homepage
+        // all product view in products page
         app.get("/all-products", async (req, res) => {
             const { title, sort, category, brand } = req.query
 
@@ -207,6 +237,7 @@ const dbConnect = async () => {
             }
 
             const sortOption = sort === 'asc' ? 1 : -1;
+
             const products = await productCollection.find(query).sort({ price: sortOption }).toArray()
             const totalProducts = await productCollection.countDocuments(query)
 
@@ -216,6 +247,19 @@ const dbConnect = async () => {
            
             res.json({products,brands,categories,totalProducts})
         })
+
+     
+        // Get products for featured
+        app.get("/products", async (req, res) => {
+            try {
+                const products = await productCollection.find().limit(6).toArray(); // Limit to 6 items
+                res.send(products);
+            } catch (error) {
+                // console.error("Error fetching products:", error);
+                res.status(500).send({ error: "Failed to fetch products" });
+            }
+        });
+
 
         //product add to wishlist by user
         app.patch("/wishlist/add", async (req, res) => {
